@@ -1,0 +1,5 @@
+{
+  "name": "Autonomous Arabic News Bot",
+  "description": "A professional news analyzer bot that fetches RSS feeds, analyzes them using Gemini 2.5 Flash, and posts high-quality Arabic content to Facebook.",
+  "requestFramePermissions": []
+}
