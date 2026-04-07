@@ -1,17 +1,17 @@
-# 🤖 Autonomous Arabic News Bot for Facebook
+# 🤖 Autonomous Arabic News Bot — Web Edition
 
 <div align="center">
 
-![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python&logoColor=white)
-![Gemini](https://img.shields.io/badge/Gemini-2.5_Flash-orange?style=for-the-badge&logo=google&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![Gemini](https://img.shields.io/badge/Gemini-Flash-orange?style=for-the-badge&logo=google&logoColor=white)
 ![Facebook](https://img.shields.io/badge/Facebook-Graph_API-1877F2?style=for-the-badge&logo=facebook&logoColor=white)
-![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-Automated-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-SPA_Dashboard-646CFF?style=for-the-badge&logo=vite&logoColor=white)
 ![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-**A fully autonomous AI-powered news bot that fetches breaking news from trusted Arabic & international sources, analyzes it using Google Gemini, and publishes professional Arabic posts to a Facebook Page every 3 hours — completely free.**
+**A full-stack autonomous news bot built with TypeScript & Express. Fetches breaking Arabic news, analyzes it with Google Gemini, and publishes professional posts to Facebook every 3 hours — with a live web dashboard to monitor everything.**
 
-[Features](#-features) • [How It Works](#-how-it-works) • [Post Format](#-post-format) • [Setup](#-setup) • [Configuration](#-configuration) • [FAQ](#-faq)
+[Features](#-features) • [Architecture](#-architecture) • [Post Format](#-post-format) • [Setup](#-setup) • [API Reference](#-api-reference) • [Dashboard](#-dashboard) • [FAQ](#-faq)
 
 </div>
 
@@ -19,15 +19,9 @@
 
 ## 📌 Overview
 
-This bot is a production-ready Python automation pipeline running on **GitHub Actions**. It combines RSS feed parsing, AI-powered news analysis, smart image extraction, and Facebook publishing into a single zero-maintenance workflow.
+This is the **Web Edition** of the Autonomous Arabic News Bot — a TypeScript rewrite of the original Python bot, featuring a built-in **Express web server**, a **Vite-powered SPA dashboard**, a **REST API**, and **persistent logging** to SQLite.
 
-Every run, the bot:
-- Fetches the latest articles from multiple RSS feeds
-- Prioritizes **breaking and high-impact news** using keyword filtering
-- Skips already-posted articles using a **SQLite deduplication database**
-- Rewrites and deeply analyzes the article using **Gemini 2.5 Flash**
-- Finds a high-quality image from the article page automatically
-- Publishes a complete, professional Arabic post to your Facebook Page
+Unlike the Python version which runs on GitHub Actions, this edition runs as a **long-running Node.js server** on any hosting platform (Railway, Render, VPS, etc.) and includes a real-time control panel accessible from any browser.
 
 ---
 
@@ -35,72 +29,88 @@ Every run, the bot:
 
 | Feature | Details |
 |---------|---------|
-| 🧠 **AI-Powered Analysis** | Deep geopolitical & sports analysis via Gemini 2.5 Flash |
-| 📡 **Multi-Source RSS** | Al Jazeera, BBC Arabic, Sport360, FilGoal |
-| 🔥 **Hot News Filter** | Prioritizes breaking news using 40+ Arabic keywords |
-| 🖼️ **Smart Image Extraction** | RSS → `og:image` → `twitter:image` → BeautifulSoup fallback |
-| 🔄 **Deduplication** | SQLite database persisted in GitHub — no repeated posts |
-| ⏰ **Fully Automated** | Runs every 3 hours via GitHub Actions cron scheduler |
-| 🇸🇦 **Pure Arabic Output** | Modern Standard Arabic (Fus-ha) — no English words in posts |
-| 🆓 **100% Free** | Runs entirely on free tiers (GitHub Actions + Gemini API) |
+| 🧠 **AI-Powered Analysis** | Deep political & sports analysis via Google Gemini Flash |
+| 📡 **Multi-Source RSS** | Al Jazeera, BBC Arabic, Sport360 — fully configurable |
+| 🔥 **Hot News Filter** | Prioritizes breaking news using 40+ Arabic urgency keywords |
+| 🖼️ **Smart Image Extraction** | RSS enclosure → `og:image` → `twitter:image` fallback chain |
+| 🔄 **Deduplication** | SQLite database prevents any article from being posted twice |
+| ⏰ **Built-in Scheduler** | `node-cron` runs the bot every 3 hours automatically |
+| 🌐 **Web Dashboard** | Live SPA interface to monitor posts, logs, and trigger runs |
+| 📋 **REST API** | Full API to check status, view posts, stream logs, and trigger cycles |
+| 🇸🇦 **Pure Arabic Output** | Modern Standard Arabic — no Latin characters in published posts |
+| 📝 **Persistent Logging** | All bot activity stored in SQLite and accessible via API |
 
 ---
 
-## ⚙️ How It Works
+## 🏗️ Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                     Bot Workflow (per run)                    │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  1. Fetch Articles    →  Parse RSS feeds (up to 15/feed)    │
-│          ↓                                                   │
-│  2. Filter News       →  Hot keywords → breaking news first  │
-│          ↓                                                   │
-│  3. Check Duplicates  →  SQLite DB stored in GitHub repo     │
-│          ↓                                                   │
-│  4. AI Analysis       →  Gemini 2.5 Flash generates post    │
-│          ↓                                                   │
-│  5. Image Extraction  →  RSS → og:image → scrape fallback   │
-│          ↓                                                   │
-│  6. Publish           →  Facebook Graph API v19.0            │
-│          ↓                                                   │
-│  7. Save Record       →  Commit news_bot.db to GitHub       │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                    Application Architecture                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐  │
+│   │  Vite SPA    │     │   Express    │     │  node-cron   │  │
+│   │  Dashboard   │────▶│   Server     │◀────│  Scheduler   │  │
+│   │  (React/TS)  │     │  :3000       │     │  0 */3 * * * │  │
+│   └──────────────┘     └──────┬───────┘     └──────────────┘  │
+│                               │                                 │
+│              ┌────────────────┼─────────────────┐              │
+│              ▼                ▼                 ▼              │
+│        ┌──────────┐   ┌──────────────┐  ┌──────────────┐     │
+│        │  SQLite  │   │  RSS Parser  │  │ Google Gemini│     │
+│        │ Database │   │  (rss-parser)│  │  Flash API   │     │
+│        │ posts+   │   │  Al Jazeera  │  │  Analysis +  │     │
+│        │  logs    │   │  BBC Arabic  │  │  Rewriting   │     │
+│        └──────────┘   │  Sport360   │  └──────┬───────┘     │
+│                        └──────────────┘         │             │
+│                                                  ▼             │
+│                                         ┌──────────────┐      │
+│                                         │  Facebook    │      │
+│                                         │  Graph API   │      │
+│                                         │  v19.0       │      │
+│                                         └──────────────┘      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Bot Cycle (runs every 3 hours)
+
+```
+Fetch RSS Feeds → Filter Hot News → Check Duplicates
+       → Gemini Analysis → Extract Image → Post to Facebook
+              → Save to SQLite → Log Result
 ```
 
 ---
 
 ## 📝 Post Format
 
-Every published post follows this exact structure:
+Every published post follows this seamless narrative structure (no section labels):
 
 ```
-🔥 [Compelling headline that captures the essence of the event]
+🔥 [Compelling Arabic headline summarizing the event]
 
-📰 The News:
-A clear and accurate summary of what happened in 3–4 complete
-sentences. Answers: Who? What? Where? When?
+[3–4 complete sentences reporting the news accurately:
+ Who? What happened? Where? How?]
 
-🔍 Analysis:
-Deep analytical paragraph uncovering hidden dimensions, real
-motives, and expected consequences — 4 complete sentences.
+[4-sentence deep analysis paragraph: What the reports
+ don't say? Hidden motives? Expected regional consequences?]
 
-💬 Analyst's Take:
-A bold, direct opinion in 1–2 complete sentences.
+[2-sentence bold analyst opinion.]
 
-📌 Source: [Source Name]
+📌 المصدر: [Source Name]
 ```
+
+> Posts are written entirely in **Modern Standard Arabic (Fus-ha)** — no Latin characters, no English names, no URLs.
 
 ---
 
 ## 📦 Requirements
 
-Before setting up, make sure you have:
-
-- A **GitHub account** (free)
-- A **Gemini API key** from [aistudio.google.com](https://aistudio.google.com) (free)
+- **Node.js** 20.x or higher
+- **npm** 9.x or higher
+- A **Google Gemini API key** from [aistudio.google.com](https://aistudio.google.com)
 - A **Facebook Page** with a Long-Lived Page Access Token
 - Your **Facebook Page ID**
 
@@ -108,50 +118,133 @@ Before setting up, make sure you have:
 
 ## 🚀 Setup
 
-### Step 1 — Fork or Clone the Repository
+### Step 1 — Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/facebook-news-bot.git
-cd facebook-news-bot
+git clone https://github.com/your-username/arabic-news-bot.git
+cd arabic-news-bot
+npm install
 ```
 
-### Step 2 — Add GitHub Secrets
+### Step 2 — Configure Environment Variables
 
-Go to **Settings → Secrets and variables → Actions → New repository secret**
+Copy the example environment file and fill in your credentials:
 
-| Secret Name | Description |
-|-------------|-------------|
-| `GEMINI_API_KEY` | Your Google AI Studio API key |
-| `FB_PAGE_ACCESS_TOKEN` | Facebook Long-Lived Page Access Token |
-| `FB_PAGE_ID` | Your Facebook Page numeric ID |
+```bash
+cp .env.example .env
+```
 
-### Step 3 — Enable Workflow Write Permissions
+Edit `.env`:
 
-Go to **Settings → Actions → General → Workflow permissions**
-Select ✅ **Read and write permissions** → Save
+```env
+GEMINI_API_KEY1=your_gemini_api_key_here
+FB_PAGE_ACCESS_TOKEN=your_facebook_page_access_token
+FB_PAGE_ID=your_facebook_page_id
+```
 
-### Step 4 — Run the Bot
+### Step 3 — Run in Development Mode
 
-Go to **Actions → Facebook News Bot → Run workflow → Run workflow**
+```bash
+npm run dev
+```
 
-The bot will immediately fetch, analyze, and publish one article.
-After that, it runs automatically every 3 hours.
+The server starts at `http://localhost:3000` with hot-reload enabled.
+
+### Step 4 — Build for Production
+
+```bash
+npm run build
+NODE_ENV=production node dist/server.js
+```
+
+---
+
+## 🌐 Dashboard
+
+Once the server is running, open `http://localhost:3000` in your browser to access the live dashboard.
+
+The dashboard provides:
+
+| Panel | Description |
+|-------|-------------|
+| **Status** | Bot configuration and current state |
+| **Posts** | Last 50 articles published to Facebook |
+| **Logs** | Last 100 bot activity log entries |
+| **Trigger** | Manual run button to force an immediate cycle |
+
+---
+
+## 📡 API Reference
+
+All endpoints are served at `http://localhost:3000/api/`
+
+### `GET /api/status`
+Returns the current bot configuration and running status.
+
+```json
+{
+  "status": "running",
+  "config": {
+    "POST_INTERVAL_MINUTES": 180,
+    "RSS_FEEDS": { "war": [...], "sports": [...] },
+    "FB_PAGE_ACCESS_TOKEN": "***"
+  }
+}
+```
+
+### `GET /api/posts`
+Returns the last 50 articles posted to Facebook.
+
+```json
+[
+  {
+    "id": 1,
+    "url": "https://...",
+    "title": "عنوان الخبر",
+    "category": "war",
+    "posted_at": "2026-04-07T12:00:00.000Z"
+  }
+]
+```
+
+### `GET /api/logs`
+Returns the last 100 log entries from the bot.
+
+```json
+[
+  {
+    "id": 1,
+    "message": "Bot cycle started",
+    "level": "INFO",
+    "timestamp": "2026-04-07T12:00:00.000Z"
+  }
+]
+```
+
+### `POST /api/run`
+Manually triggers an immediate bot cycle without waiting for the scheduler.
+
+```json
+{ "message": "Bot cycle triggered" }
+```
 
 ---
 
 ## 📁 File Structure
 
 ```
-facebook-news-bot/
+arabic-news-bot/
 │
-├── .github/
-│   └── workflows/
-│       └── run_bot.yml          # Cron scheduler & CI pipeline
+├── src/                         # Frontend SPA source (Vite + React/TS)
+│   └── ...
 │
-├── facebook_news_bot.py         # Core bot logic
-├── run_once.py                  # Entry point for single execution
-├── requirements.txt             # Python dependencies
-├── news_bot.db                  # SQLite deduplication database (auto-created)
+├── server.ts                    # Main Express server + bot logic
+├── vite.config.ts               # Vite bundler configuration
+├── tsconfig.json                # TypeScript configuration
+├── package.json                 # Dependencies and scripts
+├── .env.example                 # Environment variables template
+├── .gitignore                   # Ignored files (includes .env)
+├── news_bot.db                  # SQLite database (auto-created)
 └── README.md                    # This file
 ```
 
@@ -159,19 +252,33 @@ facebook-news-bot/
 
 ## 🔧 Configuration
 
-All settings are defined inside `run_bot.yml` under the `Create config.json` step.
+All bot settings are defined in the `config` object inside `server.ts`:
 
-### Posting Schedule
-
-Edit the cron expression in `run_bot.yml`:
-
-```yaml
-on:
-  schedule:
-    - cron: '0 */3 * * *'   # Every 3 hours
+```typescript
+const config = {
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY1 || "",
+  FB_PAGE_ACCESS_TOKEN: process.env.FB_PAGE_ACCESS_TOKEN || "",
+  FB_PAGE_ID: process.env.FB_PAGE_ID || "",
+  POST_INTERVAL_MINUTES: 180,
+  RSS_FEEDS: {
+    war: [
+      "https://www.aljazeera.net/rss",
+      "https://feeds.bbci.co.uk/arabic/rss.xml",
+    ],
+    sports: [
+      "https://arabic.sport360.com/feed/",
+    ],
+  },
+};
 ```
 
-Common schedules:
+### Changing the Schedule
+
+The cron expression is set in `startServer()`:
+
+```typescript
+cron.schedule("0 */3 * * *", () => runBotCycle());
+```
 
 | Cron Expression | Frequency |
 |----------------|-----------|
@@ -180,23 +287,22 @@ Common schedules:
 | `0 */6 * * *` | Every 6 hours |
 | `0 8,14,20 * * *` | At 8am, 2pm, 8pm UTC |
 
-### RSS Feed Sources
+### Adding RSS Sources
 
-Add or remove sources in the `RSS_FEEDS` section of `run_bot.yml`:
+Add URLs to the `RSS_FEEDS` object in `server.ts`:
 
-```python
-'RSS_FEEDS': {
-    'war': [
-        'https://www.aljazeera.net/xml/rss/all.xml',   # Al Jazeera Arabic
-        'https://feeds.bbci.co.uk/arabic/rss.xml',      # BBC Arabic
-        # Add more war/politics feeds here
-    ],
-    'sports': [
-        'https://arabic.sport360.com/feed/',             # Sport360
-        'https://www.filgoal.com/rss',                   # FilGoal
-        # Add more sports feeds here
-    ]
-}
+```typescript
+RSS_FEEDS: {
+  war: [
+    "https://www.aljazeera.net/rss",
+    "https://feeds.bbci.co.uk/arabic/rss.xml",
+    "https://your-new-source.com/rss",  // ← Add here
+  ],
+  sports: [
+    "https://arabic.sport360.com/feed/",
+    "https://your-sports-source.com/feed", // ← Or here
+  ],
+},
 ```
 
 ---
@@ -210,59 +316,42 @@ The Page Access Token requires these permissions:
 | `pages_manage_posts` | Create posts and upload photos |
 | `pages_read_engagement` | Read page metadata |
 
-### Getting a Long-Lived Page Token
-
-1. Go to [developers.facebook.com](https://developers.facebook.com) → Create a **Business** app
-2. Add the **Pages API** product
-3. Open **Graph API Explorer** → Select your app → Select your Page
-4. Add permissions: `pages_manage_posts`, `pages_read_engagement`
-5. Click **Generate Access Token** and copy it
-
-> ⚠️ **Important:** Standard user tokens expire in ~1 hour. Always use a **Long-Lived Page Token** which does not expire for Pages.
-
----
-
-## 📊 Free Tier Usage
-
-| Service | Free Limit | Daily Bot Usage |
-|---------|-----------|----------------|
-| GitHub Actions | 2,000 min/month | ~2 min/run × 8 runs = ~16 min/day |
-| Gemini API | 1,500 req/day | 8 requests/day |
-| Facebook Graph API | Unlimited | 8 posts/day |
-
-**Monthly cost: $0.00** ✅
+> ⚠️ Always use a **Long-Lived Page Token** — standard tokens expire in ~1 hour.
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Library | Purpose |
+| Package | Purpose |
 |---------|---------|
-| [feedparser](https://feedparser.readthedocs.io/) | RSS feed parsing |
-| [google-genai](https://ai.google.dev/) | Gemini 2.5 Flash AI analysis |
-| [requests](https://requests.readthedocs.io/) | HTTP requests & image validation |
-| [beautifulsoup4](https://www.crummy.com/software/BeautifulSoup/) | HTML scraping for fallback images |
-| [sqlite3](https://docs.python.org/3/library/sqlite3.html) | Deduplication database |
-| [GitHub Actions](https://github.com/features/actions) | Automated scheduling |
+| [express](https://expressjs.com/) | HTTP server & REST API |
+| [vite](https://vitejs.dev/) | Frontend SPA bundler with HMR |
+| [@google/genai](https://ai.google.dev/) | Gemini Flash AI analysis |
+| [rss-parser](https://www.npmjs.com/package/rss-parser) | RSS feed parsing |
+| [cheerio](https://cheerio.js.org/) | HTML scraping for og:image |
+| [better-sqlite3](https://www.npmjs.com/package/better-sqlite3) | SQLite deduplication & logging |
+| [node-cron](https://www.npmjs.com/package/node-cron) | Cron scheduler |
+| [axios](https://axios-http.com/) | HTTP client for Facebook API |
+| [dotenv](https://www.npmjs.com/package/dotenv) | Environment variable loading |
 
 ---
 
 ## ❓ FAQ
 
-**Q: Why is the bot not posting?**
-Check the Actions tab for errors. Common causes: expired Facebook token, Gemini quota exceeded, or no new articles found.
+**Q: How is this different from the Python version?**
+This edition runs as a persistent web server with a dashboard and REST API. The Python version runs as scheduled one-off jobs on GitHub Actions. Both produce identical Facebook posts.
 
-**Q: Will it post duplicate articles?**
-No. Every posted URL is saved in `news_bot.db` which is committed back to the repository after each run, ensuring no duplicates even across separate runs.
+**Q: Where is the database stored?**
+`news_bot.db` is created automatically in the project root on first run. It stores all posted article URLs and all bot logs.
 
-**Q: Can I add more Facebook pages?**
-Yes. Duplicate the `post_to_facebook()` call in `run_bot_cycle()` with a different `page_id` and `access_token`.
+**Q: Can I run both bots simultaneously?**
+Yes — as long as they post to different Facebook Pages or use different databases, they won't conflict.
 
-**Q: The Gemini quota runs out — what do I do?**
-The bot has a built-in retry mechanism with automatic wait time extracted from the API error. For heavy usage, enable billing on Google Cloud (Gemini 2.5 Flash costs ~$0.15 per million tokens).
+**Q: The Gemini API returns errors — what do I do?**
+Check `GET /api/logs` for the exact error. Common causes: invalid API key, daily quota exceeded (1,500 req/day on free tier), or model name mismatch.
 
-**Q: Can I change the post language?**
-Yes. Modify the `WAR_PROMPT` and `SPORTS_PROMPT` variables in `facebook_news_bot.py` to instruct Gemini to write in any language.
+**Q: How do I deploy to production?**
+Run `npm run build` then start with `NODE_ENV=production node dist/server.js`. Compatible with Railway, Render, Fly.io, or any VPS running Node.js 20+.
 
 ---
 
@@ -274,7 +363,7 @@ This project is licensed under the **MIT License** — free to use, modify, and 
 
 <div align="center">
 
-Built with ❤️ and 🤖 by AI automation
+Built with ❤️ and 🤖
 
 *Star ⭐ this repo if you found it useful!*
 
