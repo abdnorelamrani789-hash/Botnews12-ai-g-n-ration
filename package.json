@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
-    "start": "node server.ts",
+    "start": "tsx server.ts",
+    "run-action": "tsx run-bot.ts",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
