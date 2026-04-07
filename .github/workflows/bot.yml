@@ -10,7 +10,7 @@ jobs:
   run-bot:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # ضرورية باش البوت يقدر يدير Push
+      contents: write # ضرورية باش البوت يقدر يدير Push للداتابيز
 
     steps:
       - name: Checkout Repository
@@ -26,16 +26,17 @@ jobs:
 
       - name: Run The Bot Script
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          # تم تصحيح الأسماء هنا باش يفهمهم الكود ديالك
+          GEMINI_API_KEY1: ${{ secrets.GEMINI_API_KEY }} 
+          FB_PAGE_ACCESS_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }} 
         run: npm run run-action
 
       - name: Commit & Push SQLite DB
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          # هنا حددنا السمية ديال الداتابيز ديالك بالضبط
+          # رفع قاعدة البيانات بعد النشر لمنع التكرار
           git add -f news_bot.db
-          # هاد [skip ci] كتمتنع جيتهاب باش ما يعاودش يخدم الأكشن من جديد بسبب هاد التحديث
           git commit -m "🤖 Auto-update database [skip ci]" || echo "No changes to commit"
           git push
