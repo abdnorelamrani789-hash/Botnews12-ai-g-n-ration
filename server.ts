@@ -8,7 +8,9 @@ import Parser from "rss-parser";
 import * as cheerio from "cheerio";
 import cron from "node-cron";
 import cors from "cors";
-import { GoogleGenAI } from "@google/genai";
+import FormData from "form-data";
+import sharp from "sharp";
+import { GoogleGenAI, Modality } from "@google/genai";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -28,6 +30,7 @@ app.use(express.json());
 // --- Configuration ---
 const config = {
   GEMINI_API_KEY: process.env.GEMINI_API_KEY1 || "",
+  GEMINI_IMAGE_KEY: process.env.GEMINI_API_KEY2 || process.env.GEMINI_API_KEY1 || "",
   FB_PAGE_ACCESS_TOKEN: process.env.FB_PAGE_ACCESS_TOKEN || "",
   FB_PAGE_ID: process.env.FB_PAGE_ID || "",
   POST_INTERVAL_MINUTES: 180,
@@ -82,6 +85,32 @@ function markAsPosted(url: string, title: string, category: string) {
   db.prepare(
     "INSERT OR IGNORE INTO posted_articles (url, title, category, posted_at) VALUES (?, ?, ?, ?)"
   ).run(url, title, category, new Date().toISOString());
+}
+
+// --- Helper: Retry Logic ---
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let lastError: any;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      const isRetryable = 
+        err.message?.includes("429") || 
+        err.message?.includes("RESOURCE_EXHAUSTED") ||
+        err.message?.includes("503") ||
+        err.message?.includes("UNAVAILABLE");
+
+      if (isRetryable && i < maxRetries - 1) {
+        const delay = Math.pow(2, i) * 5000; // 5s, 10s, 20s...
+        log(`Gemini busy or quota hit, retrying in ${delay / 1000}s... (Attempt ${i + 1}/${maxRetries})`, "WARNING");
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
 }
 
 // --- Bot Logic ---
@@ -154,114 +183,193 @@ async function getBestImage(article: any) {
   }
 }
 
-const WAR_PROMPT = `أنت محرر صحفي وسياسي محترف في صفحة إخبارية عربية على فيسبوك.
+const WAR_PROMPT = `أنت محرر صحفي وسياسي محترف في صفحة إخبارية عربية على فيسبوك (الميدان - AL MYDAN).
+مهمتك: تحويل الخبر إلى منشور "Viral" يجذب الانتباه ويحفز التفاعل.
 
-مهمتك: اكتب منشوراً متكاملاً يذكر الخبر أولاً ثم يحلله.
+الهيكل المطلوب للمنشور (التزم بالترتيب التالي دون كتابة أي عناوين جانبية أو تسميات للأقسام أو إيموجي للأقسام):
+
+١- [الـ Hook]: ابدأ بجملة صادمة أو تساؤل مثير يحبس السكرول (استخدم إيموجي 🚨 أو 🔴 أو 😳 في البداية). مثال: "🚨 تطور مفاجئ يقلب الموازين.. ماذا يحدث الآن؟"
+
+٢- [الملخص]: اكتب ملخصاً مكثفاً للحدث في سطرين فقط (ابدأ النص مباشرة بدون إيموجي).
+
+٣- [التفاصيل]: اعرض أهم ٣ نقاط في شكل قائمة (Bullet points) تبدأ بـ "-" (ابدأ القائمة مباشرة بدون إيموجي).
+
+٤- [التحليل]: تحليل ذكي وقصير جداً في جملتين حول التداعيات أو الدوافع الخفية (ابدأ النص مباشرة بدون إيموجي).
 
 قواعد صارمة جداً:
-١- اكتب باللغة العربية الفصحى حصراً. لا تكتب أي حرف لاتيني إطلاقاً، حتى في أسماء الأشخاص والدول والمدن — استخدم دائماً الاسم العربي.
-٢- كل جملة يجب أن تكون مكتملة ومفهومة تماماً.
-٣- لا ترقيم (أولاً، ثانياً...). لا روابط. لا تذكر المصدر.
-٤- لا تستخدم كلمات توضيحية مثل "الخبر" أو "التحليل" أو "رأي المحلل". ادمج المحتوى بشكل انسيابي.
-٥- لا تتجاوز ٢٨٠ كلمة.
+- ممنوع منعاً باتاً كتابة كلمات مثل "ماذا حدث؟" أو "التفاصيل:" أو "ماذا يعني هذا؟" أو أي عناوين للأقسام.
+- ممنوع استخدام الإيموجي في بداية الأقسام (📌، 📊، 🤔)؛ استخدم الإيموجي فقط في سطر الـ Hook الأول.
+- لغة عربية فصحى بسيطة وقوية.
+- لا تذكر المصدر. لا روابط.
+- استخدم الهاشتاجات الأكثر انتشاراً في النهاية (٥-٧ هاشتاجات).
+- المجموع الكلي للنص لا يتجاوز ١٥٠ كلمة.
 
-اكتب المنشور بهذا الشكل الحرفي:
-
-[إيموجي مناسب للخبر] [عنوان جذاب ومثير يلخص الحدث]
-
-[اذكر تفاصيل الحدث بدقة وأمانة في ٣ إلى ٤ جمل مكتملة. أجب عن: ماذا حدث؟ من الأطراف؟ أين وكيف؟]
-
-[اكتب تحليلاً عميقاً في فقرة من ٤ جمل مكتملة. تناول: ما الذي لا تقوله التقارير؟ ما الدوافع الخفية؟ ما التداعيات المتوقعة على المنطقة؟]
-
-[اكتب رأيك الصريح والجريء في جملتين مكتملتين.]
-
-الخبر المراد تحليله:
+الخبر المراد معالجته:
 العنوان: {title}
 التفاصيل: {summary}`;
 
-const SPORTS_PROMPT = `أنت محرر صحفي رياضي محترف في صفحة رياضية عربية على فيسبوك.
+const SPORTS_PROMPT = `أنت محرر رياضي محترف في صفحة (الميدان الرياضي - AL MYDAN).
+مهمتك: تحويل الخبر الرياضي إلى منشور حماسي "Viral" يثير تفاعل المشجعين.
 
-مهمتك: اكتب منشوراً متكاملاً يذكر الخبر أولاً ثم يحلله.
+الهيكل المطلوب للمنشور (التزم بالترتيب التالي دون كتابة أي عناوين جانبية أو تسميات للأقسام أو إيموجي للأقسام):
+
+١- [الـ Hook]: ابدأ بجملة حماسية أو تساؤل مثير (استخدم إيموجي ⚽️ أو 🔥 أو 😱). مثال: "🔥 زلزال في الميركاتو.. هل ينتقل النجم الكبير؟"
+
+٢- [الملخص]: ملخص سريع للخبر في سطرين (ابدأ النص مباشرة بدون إيموجي).
+
+٣- [التفاصيل]: اعرض أهم ٣ نقاط في شكل قائمة (Bullet points) تبدأ بـ "-" (ابدأ القائمة مباشرة بدون إيموجي).
+
+٤- [التحليل]: تحليل رياضي سريع في جملتين حول تأثير الخبر على الفريق أو البطولة (ابدأ النص مباشرة بدون إيموجي).
 
 قواعد صارمة جداً:
-١- اكتب باللغة العربية الفصحى حصراً. لا تكتب أي حرف لاتيني إطلاقاً، حتى في أسماء اللاعبين والأندية — استخدم دائماً الاسم العربي.
-٢- كل جملة يجب أن تكون مكتملة ومفهومة تماماً.
-٣- لا ترقيم. لا روابط. لا تذكر المصدر. استخدم إيموجي رياضية باعتدال.
-٤- لا تستخدم كلمات توضيحية مثل "الخبر" أو "التحليل" أو "رأي المحلل". ادمج المحتوى بشكل انسيابي.
-٥- لا تتجاوز ٢٢٠ كلمة.
+- ممنوع منعاً باتاً كتابة كلمات مثل "ماذا حدث؟" أو "التفاصيل:" أو "ماذا يعني هذا؟" أو أي عناوين للأقسام.
+- ممنوع استخدام الإيموجي في بداية الأقسام (📌، 📊، 🤔)؛ استخدم الإيموجي فقط في سطر الـ Hook الأول.
+- لغة عربية فصحى حماسية.
+- لا تذكر المصدر. لا روابط.
+- هاشتاجات رياضية قوية في النهاية.
+- المجموع الكلي للنص لا يتجاوز ١٢٠ كلمة.
 
-اكتب المنشور بهذا الشكل الحرفي:
-
-[إيموجي رياضي] [عنوان جذاب يشعل الحماس]
-
-[اذكر تفاصيل الحدث بدقة في ٢ إلى ٣ جمل مكتملة. من؟ ماذا حدث؟ أين؟]
-
-[اكتب تحليلاً في فقرة من ٣ جمل مكتملة. تناول: ما أهمية هذا الخبر؟ كيف يؤثر على الفريق أو البطولة؟]
-
-[رأيك الصريح في جملتين مكتملتين.]
-
-الخبر المراد تحليله:
+الخبر المراد معالجته:
 العنوان: {title}
 التفاصيل: {summary}`;
 
 async function analyzeWithGemini(title: string, summary: string, category: string, source: string) {
-  if (!config.GEMINI_API_KEY) {
-    log("GEMINI_API_KEY is missing", "ERROR");
+  const keys = [process.env.GEMINI_API_KEY1, process.env.GEMINI_API_KEY2].filter(Boolean) as string[];
+  if (keys.length === 0) {
+    log("No Gemini API keys configured", "ERROR");
     return null;
   }
-  const ai = new GoogleGenAI({ apiKey: config.GEMINI_API_KEY });
+
   const promptTemplate = category === "war" ? WAR_PROMPT : SPORTS_PROMPT;
   const prompt = promptTemplate.replace("{title}", title).replace("{summary}", summary);
 
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: {
-        temperature: 0.8,
-      },
-    });
+  // Try each key if the previous one fails with a quota error
+  for (const key of keys) {
+    const ai = new GoogleGenAI({ apiKey: key });
+    try {
+      const response = await withRetry(() => ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt,
+        config: {
+          temperature: 0.8,
+        },
+      }));
 
-    let text = response.text || "";
-    // Clean text
-    text = text.replace(/📌[^\n]*\n?/g, "");
-    text = text.replace(/https?:\/\/\S+/g, "");
-    text = text.replace(/🔗[^\n]*\n?/g, "");
-    text = text.replace(/📰 الخبر:|🔍 التحليل:|💬 رأي المحلل:/g, "");
-    text = text.replace(/\n{3,}/g, "\n\n");
-    
-    if (text.length < 50) {
-      log("Gemini output too short", "WARNING");
-      return null;
+      let text = response.text || "";
+      text = text.replace(/https?:\/\/\S+/g, "");
+      text = text.replace(/📰 الخبر:|🔍 التحليل:|💬 رأي المحلل:/g, "");
+      text = text.replace(/\n{3,}/g, "\n\n");
+      
+      if (text.length < 50) continue; // Try next key if output is garbage
+
+      return `${text.trim()}\n\n📌 المصدر: ${source}`;
+    } catch (err: any) {
+      const isRetryable = 
+        err.message?.includes("429") || 
+        err.message?.includes("RESOURCE_EXHAUSTED") ||
+        err.message?.includes("503") ||
+        err.message?.includes("UNAVAILABLE");
+
+      if (isRetryable) {
+        log(`Key busy or quota exhausted, trying next key if available...`, "WARNING");
+        continue;
+      }
+      log(`Gemini text error: ${err.message}`, "ERROR");
+      break; // Non-retryable error, stop
     }
+  }
+  return null;
+}
 
-    return `${text.trim()}\n\n📌 المصدر: ${source}`;
+async function enhanceImage(imageUrl: string, category: string) {
+  if (!imageUrl) return null;
+  try {
+    log(`Enhancing image: ${imageUrl.substring(0, 50)}...`);
+    const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    const buffer = Buffer.from(response.data);
+
+    const width = 1080;
+    const height = 1350; // 4:5 Ratio
+
+    // Create Overlay SVG
+    const label = category === "war" ? "🚨 عاجل" : "🔴 خبر مهم";
+    const svgOverlay = `
+      <svg width="${width}" height="${height}">
+        <defs>
+          <linearGradient id="grad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:rgba(0,0,0,0);stop-opacity:0" />
+            <stop offset="100%" style="stop-color:rgba(0,0,0,0.8);stop-opacity:1" />
+          </linearGradient>
+        </defs>
+        <rect x="0" y="${height - 300}" width="${width}" height="300" fill="url(#grad)" />
+        <rect x="50" y="${height - 150}" width="250" height="80" rx="10" fill="#e11d48" />
+        <text x="175" y="${height - 95}" font-family="Arial, sans-serif" font-size="45" font-weight="bold" fill="white" text-anchor="middle">${label}</text>
+        <text x="${width - 50}" y="${height - 95}" font-family="Arial, sans-serif" font-size="30" fill="rgba(255,255,255,0.7)" text-anchor="end">AL MYDAN</text>
+      </svg>
+    `;
+
+    const processedBuffer = await sharp(buffer)
+      .resize(width, height, {
+        fit: 'cover',
+        position: 'center'
+      })
+      .modulate({
+        brightness: 1.05,
+        saturation: 1.1
+      })
+      .clahe({ width: 50, height: 50 }) // Auto-enhance contrast
+      .sharpen()
+      .tint({ r: 255, g: 240, b: 230 }) // Subtle warm filter
+      .composite([{
+        input: Buffer.from(svgOverlay),
+        top: 0,
+        left: 0
+      }])
+      .toBuffer();
+
+    return processedBuffer;
   } catch (err: any) {
-    log(`Gemini error: ${err.message}`, "ERROR");
+    log(`Image enhancement error: ${err.message}`, "ERROR");
     return null;
   }
 }
 
-async function postToFacebook(caption: string, imageUrl: string | null) {
+async function postToFacebook(caption: string, image: string | Buffer | null) {
   if (!config.FB_PAGE_ACCESS_TOKEN || !config.FB_PAGE_ID) {
     log("Facebook credentials missing", "ERROR");
     return false;
   }
   try {
-    const endpoint = imageUrl
+    const isBuffer = Buffer.isBuffer(image);
+    const endpoint = image
       ? `https://graph.facebook.com/v19.0/${config.FB_PAGE_ID}/photos`
       : `https://graph.facebook.com/v19.0/${config.FB_PAGE_ID}/feed`;
     
-    const payload: any = {
-      access_token: config.FB_PAGE_ACCESS_TOKEN,
-      [imageUrl ? "caption" : "message"]: caption,
-    };
-    if (imageUrl) payload.url = imageUrl;
+    if (isBuffer) {
+      const form = new FormData();
+      form.append('source', image, { filename: 'image.png' });
+      form.append('caption', caption);
+      form.append('access_token', config.FB_PAGE_ACCESS_TOKEN);
+      
+      const resp = await axios.post(endpoint, form, {
+        headers: form.getHeaders(),
+      });
+      if (resp.data.id || resp.data.post_id) {
+        log(`Posted to Facebook with AI Image! ID: ${resp.data.post_id || resp.data.id}`);
+        return true;
+      }
+    } else {
+      const payload: any = {
+        access_token: config.FB_PAGE_ACCESS_TOKEN,
+        [image ? "caption" : "message"]: caption,
+      };
+      if (image) payload.url = image;
 
-    const resp = await axios.post(endpoint, payload);
-    if (resp.data.id || resp.data.post_id) {
-      log(`Posted to Facebook! ID: ${resp.data.post_id || resp.data.id}`);
-      return true;
+      const resp = await axios.post(endpoint, payload);
+      if (resp.data.id || resp.data.post_id) {
+        log(`Posted to Facebook! ID: ${resp.data.post_id || resp.data.id}`);
+        return true;
+      }
     }
     return false;
   } catch (err: any) {
@@ -294,8 +402,10 @@ async function runBotCycle() {
     return;
   }
 
-  const imageUrl = await getBestImage(article);
-  const success = await postToFacebook(analysis, imageUrl);
+  const originalImageUrl = await getBestImage(article);
+  const enhancedImage = await enhanceImage(originalImageUrl, article.category);
+  
+  const success = await postToFacebook(analysis, enhancedImage || originalImageUrl);
 
   if (success) {
     markAsPosted(article.url, article.title, article.category);

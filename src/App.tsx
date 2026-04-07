@@ -333,6 +333,23 @@ export default function App() {
                     />
                   </div>
                   <div className="pt-4">
+                    <h3 className="text-sm font-bold text-slate-700 mb-4">Image Enhancement (Active)</h3>
+                    <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-3 text-emerald-700">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                        <span className="text-sm font-medium">Smart Crop (4:5 Ratio)</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-emerald-700">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                        <span className="text-sm font-medium">Auto Contrast & Sharpening</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-emerald-700">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                        <span className="text-sm font-medium">Professional News Overlay</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="pt-4">
                     <h3 className="text-sm font-bold text-slate-700 mb-4">Active RSS Feeds</h3>
                     <div className="space-y-2">
                       {[
