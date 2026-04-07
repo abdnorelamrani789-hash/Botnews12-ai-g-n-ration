@@ -1,0 +1,40 @@
+name: AL MYDAN Auto Publisher
+
+on:
+  schedule:
+    # التشغيل التلقائي كل 3 ساعات
+    - cron: '0 */3 * * *'
+  workflow_dispatch: # التشغيل اليدوي
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run The Bot Script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+        run: npm run run-action
+
+      - name: Commit & Push SQLite DB
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -f *.sqlite *.db *.sqlite3
+          git commit -m "🤖 Auto-update database [skip ci]" || echo "No changes to commit"
+          git push
+
