@@ -4,13 +4,13 @@ on:
   schedule:
     # التشغيل التلقائي كل 3 ساعات
     - cron: '0 */3 * * *'
-  workflow_dispatch: # التشغيل اليدوي
+  workflow_dispatch: # التشغيل اليدوي باش تقدر تجربو وقتما بغيتي
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # ضرورية باش البوت يقدر يدير Push
 
     steps:
       - name: Checkout Repository
@@ -34,7 +34,8 @@ jobs:
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add -f *.sqlite *.db *.sqlite3
+          # هنا حددنا السمية ديال الداتابيز ديالك بالضبط
+          git add -f news_bot.db
+          # هاد [skip ci] كتمتنع جيتهاب باش ما يعاودش يخدم الأكشن من جديد بسبب هاد التحديث
           git commit -m "🤖 Auto-update database [skip ci]" || echo "No changes to commit"
           git push
-
