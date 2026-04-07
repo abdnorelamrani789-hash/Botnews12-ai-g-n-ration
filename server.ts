@@ -243,7 +243,6 @@ async function analyzeWithGemini(title: string, summary: string, category: strin
   const promptTemplate = category === "war" ? WAR_PROMPT : SPORTS_PROMPT;
   const prompt = promptTemplate.replace("{title}", title).replace("{summary}", summary);
 
-  // Try each key if the previous one fails with a quota error
   for (const key of keys) {
     const ai = new GoogleGenAI({ apiKey: key });
     try {
@@ -260,7 +259,7 @@ async function analyzeWithGemini(title: string, summary: string, category: strin
       text = text.replace(/📰 الخبر:|🔍 التحليل:|💬 رأي المحلل:/g, "");
       text = text.replace(/\n{3,}/g, "\n\n");
       
-      if (text.length < 50) continue; // Try next key if output is garbage
+      if (text.length < 50) continue; 
 
       return `${text.trim()}\n\n📌 المصدر: ${source}`;
     } catch (err: any) {
@@ -275,7 +274,7 @@ async function analyzeWithGemini(title: string, summary: string, category: strin
         continue;
       }
       log(`Gemini text error: ${err.message}`, "ERROR");
-      break; // Non-retryable error, stop
+      break; 
     }
   }
   return null;
@@ -289,9 +288,8 @@ async function enhanceImage(imageUrl: string, category: string) {
     const buffer = Buffer.from(response.data);
 
     const width = 1080;
-    const height = 1350; // 4:5 Ratio
+    const height = 1350; 
 
-    // Create Overlay SVG
     const label = category === "war" ? "🚨 عاجل" : "🔴 خبر مهم";
     const svgOverlay = `
       <svg width="${width}" height="${height}">
@@ -317,9 +315,9 @@ async function enhanceImage(imageUrl: string, category: string) {
         brightness: 1.05,
         saturation: 1.1
       })
-      .clahe({ width: 50, height: 50 }) // Auto-enhance contrast
+      .clahe({ width: 50, height: 50 }) 
       .sharpen()
-      .tint({ r: 255, g: 240, b: 230 }) // Subtle warm filter
+      .tint({ r: 255, g: 240, b: 230 }) 
       .composite([{
         input: Buffer.from(svgOverlay),
         top: 0,
@@ -378,7 +376,8 @@ async function postToFacebook(caption: string, image: string | Buffer | null) {
   }
 }
 
-async function runBotCycle() {
+// ⚠️ زدت ليها كلمة export باش نقدرو نستعملوها فملف run-bot.ts ⚠️
+export async function runBotCycle() {
   log("Bot cycle started");
   const articles = await fetchArticles();
   const newArticles = [];
@@ -471,4 +470,9 @@ async function startServer() {
   });
 }
 
-startServer();
+// ⚠️ هاد الشرط هو السر: كيخلي السيرفر يخدم غير فالحاسوب ديالك أو فالسيرفر الشخصي، 
+// وكيحبسو فـ GitHub Actions باش ما يبقاش معلق ⚠️
+if (!process.env.GITHUB_ACTIONS) {
+  startServer();
+}
+
